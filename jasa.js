@@ -1126,7 +1126,7 @@
         updateEstimasiDisplay();
 
         // Nonaktifkan tombol Save dan Cancel CRM
-        disableCRMButtons();
+        //disableCRMButtons();
 
         if (!SILENT_MODE) console.log('✅ Compact table container berhasil dibuat dan ditampilkan');
     }
@@ -1496,29 +1496,29 @@
     }
 
     // PERBAIKAN 12: Disable CRM Buttons
-    function disableCRMButtons() {
-        // Nonaktifkan tombol Save dan Cancel CRM
-        const saveBtn = document.getElementById('submit-btn');
-        const cancelBtn = document.getElementById('cancel-btn');
+    // function disableCRMButtons() {
+    //     // Nonaktifkan tombol Save dan Cancel CRM
+    //     const saveBtn = document.getElementById('submit-btn');
+    //     const cancelBtn = document.getElementById('cancel-btn');
 
-        if (saveBtn) {
-            saveBtn.disabled = true;
-            saveBtn.style.opacity = '0.5';
-            saveBtn.style.cursor = 'not-allowed';
-            saveBtn.title = 'Tombol dinonaktifkan - Gunakan tombol Simpan Estimasi di panel Toyota';
-        }
+    //     if (saveBtn) {
+    //         saveBtn.disabled = true;
+    //         saveBtn.style.opacity = '0.5';
+    //         saveBtn.style.cursor = 'not-allowed';
+    //         saveBtn.title = 'Tombol dinonaktifkan - Gunakan tombol Simpan Estimasi di panel Toyota';
+    //     }
 
-        if (cancelBtn) {
-            cancelBtn.disabled = true;
-            cancelBtn.style.opacity = '0.5';
-            cancelBtn.style.cursor = 'not-allowed';
-            cancelBtn.title = 'Tombol dinonaktifkan - Gunakan panel Toyota untuk mengelola estimasi';
-        }
+    //     if (cancelBtn) {
+    //         cancelBtn.disabled = true;
+    //         cancelBtn.style.opacity = '0.5';
+    //         cancelBtn.style.cursor = 'not-allowed';
+    //         cancelBtn.title = 'Tombol dinonaktifkan - Gunakan panel Toyota untuk mengelola estimasi';
+    //     }
 
-        if (saveBtn || cancelBtn) {
-            if (!SILENT_MODE) console.log('✅ Tombol CRM Save/Cancel dinonaktifkan');
-        }
-    }
+    //     if (saveBtn || cancelBtn) {
+    //         if (!SILENT_MODE) console.log('✅ Tombol CRM Save/Cancel dinonaktifkan');
+    //     }
+    // }
 
     // PERBAIKAN 13: Copy All From Main Table dengan Swap Name/Desc
     function copyAllFromMainTable() {
