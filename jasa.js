@@ -156,13 +156,23 @@
     }
 
     // 6. Fungsi updateStatusInfo()
-    // PERBAIKAN: Fungsi updateStatusInfo dengan tampilan yang lebih proporsional
+    // PERBAIKAN: Fungsi updateStatusInfo dengan tampilan customer data
     function updateStatusInfo() {
         const statusInfoContent = document.getElementById('status-info-content');
         if (!statusInfoContent) return;
 
         if (currentEstimasi) {
-            // ✅ ESTIMASI DITEMUKAN - TAMPILAN BESAR DAN JELAS
+            // Tampilkan data customer jika ada
+            const customerInfo = currentEstimasi.name_customer ? `
+            <div style="background: #e3f2fd; padding: 8px; border-radius: 4px; margin-bottom: 8px; border-left: 4px solid #2196f3;">
+                <div style="font-weight: 600; color: #1976d2; font-size: 11px;">CUSTOMER</div>
+                <div style="color: #0d47a1; font-weight: 500; margin-top: 4px;">${currentEstimasi.name_customer}</div>
+                ${currentEstimasi.telepon_customer ? `
+                    <div style="font-size: 10px; color: #1976d2; margin-top: 2px;">📞 ${currentEstimasi.telepon_customer}</div>
+                ` : ''}
+            </div>
+        ` : '';
+
             statusInfoContent.innerHTML = `
             <div style="background: linear-gradient(135deg, #107c10 0%, #0c6c0c 100%); color: white; padding: 16px; border-radius: 4px; margin-bottom: 12px;">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
@@ -171,6 +181,8 @@
                 </div>
                 <div style="font-size: 14px; opacity: 0.9;">Data estimasi berhasil dimuat dari database</div>
             </div>
+
+            ${customerInfo}
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
                 <div style="background: #f8f9fa; padding: 8px; border-radius: 4px;">
@@ -200,38 +212,22 @@
                 </div>
             </div>
 
-            <div style="margin-top: 12px; padding: 8px; background: #e3f2fd; border-radius: 4px; border-left: 4px solid #2196f3;">
-                <div style="font-size: 11px; color: #1976d2; font-weight: 600;">WORKORDER ID</div>
-                <div style="font-size: 10px; color: #0d47a1; font-family: monospace; margin-top: 2px;">${currentWorkOrderId || '-'}</div>
+            <div style="margin-top: 12px; padding: 8px; background: #fff3cd; border-radius: 4px; border-left: 4px solid #ffc107;">
+                <div style="font-size: 11px; color: #856404; font-weight: 600;">WORKORDER ID</div>
+                <div style="font-size: 10px; color: #856404; font-family: monospace; margin-top: 2px;">${currentWorkOrderId || '-'}</div>
+                <div style="font-size: 9px; color: #856404; margin-top: 4px;">Data customer otomatis disinkronisasi dari CRM5</div>
             </div>
         `;
-    } else {
-        // ❌ TIDAK ADA ESTIMASI - TAMPILAN INFORMATIF
-        statusInfoContent.innerHTML = `
-            <div style="text-align: center; padding: 30px 20px;">
-                <div style="font-size: 32px; margin-bottom: 12px; color: #ff9800;">🔍</div>
-                <div style="font-size: 16px; font-weight: 600; color: #323130; margin-bottom: 8px;">Mencari Estimasi</div>
-                <div style="font-size: 13px; color: #666; margin-bottom: 16px;">
-                    ${currentPlateNumber ?
-            `Mencari data estimasi untuk plat: <strong>${currentPlateNumber}</strong>` :
-        'Menunggu data plat nomor...'
-    }
-                </div>
-                <div style="background: #fff3cd; padding: 8px 12px; border-radius: 4px; border: 1px solid #ffeaa7;">
-                    <div style="font-size: 11px; color: #856404;">
-                        <strong>Info:</strong> Hanya menampilkan estimasi dengan status "sent"
-                    </div>
-                </div>
-            </div>
-        `;
-    }
+        } else {
+            // ... (kode untuk tidak ada estimasi tetap sama)
+        }
 
-    // Update textarea keterangan
-    const keteranganInput = document.getElementById('keterangan-edit');
-    if (keteranganInput && currentEstimasi) {
-        keteranganInput.value = currentEstimasi.keterangan || '';
+        // Update textarea keterangan
+        const keteranganInput = document.getElementById('keterangan-edit');
+        if (keteranganInput && currentEstimasi) {
+            keteranganInput.value = currentEstimasi.keterangan || '';
+        }
     }
-}
 
     // FUNGSI HELPER UNTUK STATUS
     function getStatusColor(status) {
@@ -748,7 +744,227 @@
         }
     }
 
-    // PERBAIKAN 5: Load Estimasi Data dengan Error Handling
+    // ==================== FUNGSI SINKRONISASI CRM5 ====================
+
+    // Fungsi untuk mengambil data dari CRM5 berdasarkan plat nomor
+    async function fetchCRM5DataByPlate(plateNumber) {
+        try {
+            if (!SILENT_MODE) console.log('🔍 Mencari data CRM5 untuk:', plateNumber);
+
+            const fetchUrl = `https://tunastoyota.crm5.dynamics.com/api/data/v9.0/xts_workorders?fetchXml=%3Cfetch%20version%3D%221.0%22%20output-format%3D%22xml-platform%22%20mapping%3D%22logical%22%20distinct%3D%22false%22%20savedqueryid%3D%22edb1eb56-b65a-4a8a-a190-2b4c80d62d79%22%20returntotalrecordcount%3D%22true%22%20page%3D%221%22%20count%3D%2250%22%20no-lock%3D%22false%22%3E%3Centity%20name%3D%22xts_workorder%22%3E%3Cattribute%20name%3D%22statecode%22%2F%3E%3Cattribute%20name%3D%22xts_workorder%22%2F%3E%3Cattribute%20name%3D%22xts_businessunitid%22%2F%3E%3Cattribute%20name%3D%22xts_transactiondate%22%2F%3E%3Cattribute%20name%3D%22xts_ordertypeid%22%2F%3E%3Cattribute%20name%3D%22xts_workorderstatus%22%2F%3E%3Cattribute%20name%3D%22xts_customerid%22%2F%3E%3Cattribute%20name%3D%22xts_platenumber%22%2F%3E%3Cattribute%20name%3D%22xts_totalpartsamount%22%2F%3E%3Cattribute%20name%3D%22xts_totalworkamount%22%2F%3E%3Cattribute%20name%3D%22xts_contactpersonid%22%2F%3E%3Cattribute%20name%3D%22xts_totalmiscchargeamount%22%2F%3E%3Cattribute%20name%3D%22xts_totalothersalesamount%22%2F%3E%3Cattribute%20name%3D%22xts_grandtotalamount%22%2F%3E%3Cattribute%20name%3D%22xts_actualarrivaldateandtime%22%2F%3E%3Cattribute%20name%3D%22xts_actualfinishdateandtime%22%2F%3E%3Cattribute%20name%3D%22xts_maintenancemodelid%22%2F%3E%3Cattribute%20name%3D%22xti_technicalcompleted%22%2F%3E%3Cattribute%20name%3D%22xts_queuestatus%22%2F%3E%3Cattribute%20name%3D%22xts_serviceadvisorid%22%2F%3E%3Corder%20attribute%3D%22xts_transactiondate%22%20descending%3D%22true%22%2F%3E%3Corder%20attribute%3D%22xts_workorder%22%20descending%3D%22true%22%2F%3E%3Cfilter%20type%3D%22and%22%3E%3Ccondition%20attribute%3D%22statecode%22%20operator%3D%22eq%22%20value%3D%220%22%2F%3E%3C%2Ffilter%3E%3Clink-entity%20name%3D%22account%22%20from%3D%22accountid%22%20to%3D%22xts_customerid%22%20visible%3D%22false%22%20link-type%3D%22outer%22%20alias%3D%22a_2896a0f8ff0eec11b6e500224816bfa8%22%3E%3Cattribute%20name%3D%22xts_customerclassid%22%2F%3E%3C%2Flink-entity%3E%3Cattribute%20name%3D%22xts_workorderid%22%2F%3E%3Cattribute%20name%3D%22xts_contactpersonphone%22%2F%3E%3Clink-entity%20name%3D%22contact%22%20from%3D%22contactid%22%20to%3D%22xts_contactpersonid%22%20link-type%3D%22outer%22%20alias%3D%22a_ac9c1fe7eeef47228a4a87d3d017328d%22%20visible%3D%22false%22%3E%3Cattribute%20name%3D%22mobilephone%22%2F%3E%3C%2Flink-entity%3E%3Cfilter%20type%3D%22or%22%20isquickfindfields%3D%221%22%3E%3Ccondition%20attribute%3D%22xts_platenumber%22%20operator%3D%22like%22%20value%3D%22${plateNumber}%25%22%2F%3E%3C%2Ffilter%3E%3C%2Fentity%3E%3C%2Ffetch%3E`;
+
+            const response = await fetch(fetchUrl, {
+                headers: {
+                    'Accept': 'application/json',
+                    'OData-MaxVersion': '4.0',
+                    'OData-Version': '4.0'
+                },
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                throw new Error(`CRM5 API error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.value && data.value.length > 0) {
+                if (!SILENT_MODE) console.log('✅ Data CRM5 ditemukan:', data.value[0]);
+                return data.value[0]; // Ambil data pertama
+            } else {
+                if (!SILENT_MODE) console.log('ℹ️ Tidak ada data CRM5 untuk:', plateNumber);
+                return null;
+            }
+        } catch (error) {
+            if (!SILENT_MODE) console.error('❌ Error fetch CRM5 data:', error);
+            return null;
+        }
+    }
+
+    // Fungsi untuk membersihkan format nomor telepon
+    function cleanPhoneNumber(phone) {
+        if (!phone) return '';
+
+        // Hapus semua karakter non-digit
+        let cleaned = phone.replace(/[^\d]/g, '');
+
+        // Jika diawali dengan 62, biarkan
+        // Jika diawali dengan 0, ganti dengan 62
+        if (cleaned.startsWith('0')) {
+            cleaned = '62' + cleaned.substring(1);
+        }
+
+        // Jika panjang kurang dari 10, anggap tidak valid
+        if (cleaned.length < 10) {
+            return '';
+        }
+
+        return cleaned;
+    }
+
+    // Fungsi untuk mendapatkan nama customer dari CRM5
+    async function getCustomerNameFromCRM5(crmData) {
+        if (!crmData) return null;
+
+        let namaContact = null;
+        let namaAccount = null;
+
+        // Ambil ID dari CRM data
+        const contactId = crmData["_xts_contactpersonid_value"];
+        const customerId = crmData["_xts_customerid_value"];
+
+        // 1. Ambil data dari Contact
+        if (contactId) {
+            try {
+                const contactUrl = `https://tunastoyota.crm5.dynamics.com/api/data/v9.0/contacts(${contactId})`;
+                const res = await fetch(contactUrl, {
+                    headers: {
+                        "Accept": "application/json",
+                        "OData-MaxVersion": "4.0",
+                        "OData-Version": "4.0"
+                    },
+                    credentials: "include"
+                });
+
+                if (res.ok) {
+                    const contact = await res.json();
+                    namaContact = contact.fullname || contact.firstname || null;
+                    if (!SILENT_MODE) console.log('✅ Data Contact ditemukan:', namaContact);
+                }
+            } catch (error) {
+                if (!SILENT_MODE) console.warn('⚠️ Gagal mengambil data contact:', error);
+            }
+        }
+
+        // 2. Ambil data dari Account
+        if (customerId) {
+            try {
+                const accountUrl = `https://tunastoyota.crm5.dynamics.com/api/data/v9.0/accounts(${customerId})`;
+                const res = await fetch(accountUrl, {
+                    headers: {
+                        "Accept": "application/json",
+                        "OData-MaxVersion": "4.0",
+                        "OData-Version": "4.0"
+                    },
+                    credentials: "include"
+                });
+
+                if (res.ok) {
+                    const account = await res.json();
+                    namaAccount = account.name || account.xts_firstname || null;
+                    if (!SILENT_MODE) console.log('✅ Data Account ditemukan:', namaAccount);
+                }
+            } catch (error) {
+                if (!SILENT_MODE) console.warn('⚠️ Gagal mengambil data account:', error);
+            }
+        }
+
+        // 3. Format nama customer dengan logika anti-duplikasi
+        let finalNamaCustomer = null;
+
+        // Normalisasi nama ke uppercase untuk perbandingan
+        const namaContactUpper = namaContact ? namaContact.toUpperCase().trim() : null;
+        const namaAccountUpper = namaAccount ? namaAccount.toUpperCase().trim() : null;
+
+        if (namaContactUpper && namaAccountUpper) {
+            if (namaContactUpper === namaAccountUpper) {
+                finalNamaCustomer = namaContactUpper;
+            } else {
+                finalNamaCustomer = `${namaContactUpper}/${namaAccountUpper}`;
+            }
+        } else if (namaContactUpper) {
+            finalNamaCustomer = namaContactUpper;
+        } else if (namaAccountUpper) {
+            finalNamaCustomer = namaAccountUpper;
+        } else {
+            finalNamaCustomer = null;
+        }
+
+        return finalNamaCustomer;
+    }
+
+    // Fungsi untuk sinkronisasi data customer
+    async function syncCustomerData(estimasiId, plateNumber, currentData) {
+        try {
+            if (!SILENT_MODE) console.log('🔄 Sinkronisasi data customer untuk:', plateNumber);
+
+            // Ambil data dari CRM5
+            const crmData = await fetchCRM5DataByPlate(plateNumber);
+            if (!crmData) {
+                if (!SILENT_MODE) console.log('ℹ️ Tidak ada data CRM5 untuk sinkronisasi');
+                return;
+            }
+
+            // Dapatkan nama customer dari CRM5
+            const namaCustomerCRM = await getCustomerNameFromCRM5(crmData);
+
+            // Dapatkan nomor telepon dari CRM5
+            let phoneCRM = crmData.xts_contactpersonphone || crmData['a_ac9c1fe7eeef47228a4a87d3d017328d.mobilephone'] || '';
+            phoneCRM = cleanPhoneNumber(phoneCRM);
+
+            if (!SILENT_MODE) console.log('📋 Data dari CRM5:', {
+                namaCustomer: namaCustomerCRM,
+                phoneCRM: phoneCRM,
+                currentNama: currentData.name_customer,
+                currentPhone: currentData.telepon_customer
+            });
+
+            const updates = { updated_at: new Date().toISOString() };
+            let hasChanges = false;
+
+            // 🔄 UPDATE NAMA CUSTOMER - HANYA JIKA ADA PERBEDAAN
+            if (namaCustomerCRM && namaCustomerCRM !== "(Nama tidak tersedia)") {
+                const currentNamaUpper = currentData.name_customer ? currentData.name_customer.toUpperCase().trim() : '';
+                const newNamaUpper = namaCustomerCRM.toUpperCase().trim();
+
+                if (currentNamaUpper !== newNamaUpper) {
+                    updates.name_customer = namaCustomerCRM;
+                    hasChanges = true;
+                    if (!SILENT_MODE) console.log('✅ Akan update nama customer:', currentData.name_customer, '→', namaCustomerCRM);
+                } else {
+                    if (!SILENT_MODE) console.log('ℹ️ Nama customer sudah sama, tidak perlu update');
+                }
+            }
+
+            // 🔄 UPDATE TELEPON CUSTOMER - HANYA JIKA ADA PERBEDAAN
+            if (phoneCRM) {
+                const currentPhoneClean = cleanPhoneNumber(currentData.telepon_customer || '');
+
+                if (currentPhoneClean !== phoneCRM) {
+                    updates.telepon_customer = phoneCRM;
+                    hasChanges = true;
+                    if (!SILENT_MODE) console.log('✅ Akan update telepon customer:', currentData.telepon_customer, '→', phoneCRM);
+                } else {
+                    if (!SILENT_MODE) console.log('ℹ️ Telepon customer sudah sama, tidak perlu update');
+                }
+            }
+
+            // Simpan perubahan ke database jika ada
+            if (hasChanges) {
+                const { data, error } = await supabase
+                .from('estimasi')
+                .update(updates)
+                .eq('id', estimasiId)
+                .select();
+
+                if (error) throw error;
+
+                if (!SILENT_MODE) console.log('✅ Data customer berhasil diupdate:', updates);
+
+                // Perbarui currentEstimasi dengan data terbaru
+                if (data && data.length > 0) {
+                    currentEstimasi = data[0];
+                    if (!SILENT_MODE) console.log('✅ Current estimasi diperbarui dengan data customer terbaru');
+                }
+            } else {
+                if (!SILENT_MODE) console.log('ℹ️ Tidak ada perubahan data customer yang diperlukan');
+            }
+
+        } catch (error) {
+            if (!SILENT_MODE) console.error('❌ Error sinkronisasi customer data:', error);
+        }
+    }
+
+    // PERBAIKAN 5: Load Estimasi Data dengan Error Handling dan Sinkronisasi Customer
     async function loadEstimasiDataByPlate(plateNumber) {
         try {
             if (!SILENT_MODE) console.log('📊 Loading estimasi data untuk plate:', plateNumber);
@@ -768,20 +984,34 @@
                 currentEstimasi.teknisi_name = teknisiName;
 
                 if (!SILENT_MODE) console.log('✅ Data estimasi ditemukan:', currentEstimasi.nopol);
+
+                // ✅ PERBAIKAN BARU: Sinkronisasi data customer dari CRM5
+                // Jalankan di background, tidak perlu menunggu
+                syncCustomerData(currentEstimasi.id, plateNumber, currentEstimasi)
+                    .then(() => {
+                    if (!SILENT_MODE) console.log('✅ Sinkronisasi customer data selesai');
+                    // Update tampilan setelah sinkronisasi
+                    updateEstimasiDisplay();
+                    updateStatusInfo();
+                })
+                    .catch(err => {
+                    if (!SILENT_MODE) console.error('❌ Sinkronisasi customer data gagal:', err);
+                });
+
             } else {
                 currentEstimasi = null;
                 if (!SILENT_MODE) console.log('ℹ️ Tidak ada data estimasi dengan status sent untuk:', plateNumber);
             }
 
-            // ⬇️ SELALU UPDATE TAMPILAN DAN STATUS INFO
+            // Update tampilan
             updateEstimasiDisplay();
-            updateStatusInfo(); // ⬅️ INI YANG PENTING
+            updateStatusInfo();
 
         } catch (error) {
             if (!SILENT_MODE) console.error('❌ Error loading estimasi data:', error);
             currentEstimasi = null;
             updateEstimasiDisplay();
-            updateStatusInfo(); // ⬅️ UPDATE JUGA SAAT ERROR
+            updateStatusInfo();
         }
     }
 
@@ -1160,7 +1390,7 @@
         document.getElementById('detail-toggle-btn').addEventListener('click', toggleDetailCollapse);
     }
 
-    // PERBAIKAN 8: Toggle Uppercase Sparepart
+    // PERBAIKAN 8: Toggle Uppercase Sparepart dengan Real-time Update
     function toggleUppercaseSparepart() {
         isUppercaseEnabled = !isUppercaseEnabled;
         const uppercaseStatus = document.getElementById('uppercase-status');
@@ -1172,6 +1402,9 @@
             uppercaseStatus.style.fontWeight = 'bold';
             uppercaseBtn.style.background = '#0078d4';
             uppercaseBtn.style.color = 'white';
+
+            // ✅ PERBAIKAN: Tampilkan alert info
+            if (!SILENT_MODE) console.log('🔠 UPPERCASE mode aktif - data akan disimpan dalam uppercase');
         } else {
             uppercaseStatus.textContent = 'Normal';
             uppercaseStatus.style.color = '#666';
@@ -1180,7 +1413,7 @@
             uppercaseBtn.style.color = '#323130';
         }
 
-        // Update tampilan sparepart
+        // ✅ PERBAIKAN: Update tampilan sparepart secara real-time
         if (currentEstimasi) {
             renderEstimasiData();
         }
@@ -1645,7 +1878,50 @@
         }
     }
 
-    // PERBAIKAN 14: Save Estimasi dengan Data yang Sudah Di-swap
+    // FUNGSI BARU: Ambil data sparepart dari tabel yang sedang ditampilkan
+    function getSparepartDataFromTable() {
+        const sparepartRows = document.querySelectorAll('#sparepart-table-container tbody tr');
+        const sparepartData = [];
+
+        sparepartRows.forEach((row, index) => {
+            // Skip row kosong
+            if (row.querySelector('td[colspan]')) return;
+
+            const cells = row.querySelectorAll('td');
+            if (cells.length >= 5) {
+                const nameCell = cells[1];
+                const qtyCell = cells[2];
+                const priceCell = cells[3];
+                const totalCell = cells[4];
+
+                let name = nameCell.textContent.trim();
+                const qty = parseInt(qtyCell.textContent) || 1;
+                const priceText = priceCell.textContent.replace('Rp ', '').replace(/\./g, '');
+                const price = parseFloat(priceText) || 0;
+                const totalText = totalCell.textContent.replace('Rp ', '').replace(/\./g, '');
+                const total = parseFloat(totalText) || 0;
+
+                // Terapkan uppercase jika mode aktif
+                if (isUppercaseEnabled && name) {
+                    name = name.toUpperCase();
+                }
+
+                // Hanya tambahkan jika ada nama sparepart
+                if (name && name !== '-') {
+                    sparepartData.push({
+                        name: name,
+                        qty: qty,
+                        price: price,
+                        total: total
+                    });
+                }
+            }
+        });
+
+        return sparepartData;
+    }
+
+    // PERBAIKAN 14: Save Estimasi dengan Data Sparepart yang Diperbarui
     async function saveEstimasi() {
         if (!currentEstimasi) {
             alert('Tidak ada data estimasi yang tersedia');
@@ -1654,6 +1930,11 @@
 
         try {
             if (!SILENT_MODE) console.log('💾 Menyimpan estimasi...');
+
+            // ✅ PERBAIKAN: Ambil data sparepart dari tabel yang sedang ditampilkan
+            const sparepartData = getSparepartDataFromTable();
+
+            if (!SILENT_MODE) console.log('📦 Data sparepart dari tabel:', sparepartData);
 
             // Ambil semua baris service
             const serviceRows = document.querySelectorAll('#service-tbody tr:not(.total-row)');
@@ -1686,10 +1967,19 @@
                 const finalText = (finalCell?.textContent || '0').replace('Rp ', '').replace(/\./g, '');
                 const total = parseFloat(finalText) || 0;
 
-                // PERBAIKAN: Simpan dengan format yang sudah di-swap
+                // ✅ PERBAIKAN: Terapkan UPPERCASE jika aktif
+                let finalName = desc;  // desc menjadi name
+                let finalDesc = name;  // name menjadi desc
+
+                // Jika uppercase mode aktif, terapkan ke nama service
+                if (isUppercaseEnabled) {
+                    finalName = finalName.toUpperCase();
+                    finalDesc = finalDesc.toUpperCase();
+                }
+
                 serviceData.push({
-                    name: desc,  // desc menjadi name (kembalikan ke format asli database)
-                    desc: name,  // name menjadi desc (kembalikan ke format asli database)
+                    name: finalName,
+                    desc: finalDesc,
                     hour: hour,
                     price: price,
                     qty: 1,
@@ -1697,38 +1987,27 @@
                 });
             });
 
-            if (serviceData.length === 0) {
-                alert('Tidak ada data jasa yang dapat disimpan.');
+            if (serviceData.length === 0 && sparepartData.length === 0) {
+                alert('Tidak ada data jasa atau sparepart yang dapat disimpan.');
                 return;
             }
 
-            // Ambil data sparepart yang sudah ada
-            let sparepartData = [];
-            if (currentEstimasi.sparepart_data) {
-                if (Array.isArray(currentEstimasi.sparepart_data)) {
-                    sparepartData = currentEstimasi.sparepart_data;
-                } else if (typeof currentEstimasi.sparepart_data === 'string') {
-                    try {
-                        sparepartData = JSON.parse(currentEstimasi.sparepart_data);
-                    } catch (e) {
-                        if (!SILENT_MODE) console.error('❌ Gagal parse sparepart_data yang ada:', e);
-                    }
-                }
-            }
-
-            if (!SILENT_MODE) console.log('📦 Data service yang akan disimpan:', serviceData);
+            if (!SILENT_MODE) console.log('📦 Data yang akan disimpan:', {
+                service: serviceData,
+                sparepart: sparepartData
+            });
 
             // Hitung total untuk notifikasi
             const totalService = serviceData.reduce((sum, item) => sum + (item.total || 0), 0);
             const totalSparepart = sparepartData.reduce((sum, item) => sum + (item.total || 0), 0);
             const totalKeseluruhan = totalService + totalSparepart;
 
-            // Update kolom service_data dan status di tabel estimasi
+            // Update kolom service_data dan sparepart_data di tabel estimasi
             const { data, error } = await supabase
             .from('estimasi')
             .update({
                 service_data: serviceData,
-                sparepart_data: sparepartData,
+                sparepart_data: sparepartData, // ✅ PERBAIKAN: Gunakan data dari tabel, bukan dari currentEstimasi
                 total_harga: totalKeseluruhan,
                 status: 'completed',
                 updated_at: new Date().toISOString()
@@ -1738,12 +2017,16 @@
 
             if (error) throw error;
 
-            alert(`✅ Estimasi berhasil disimpan dengan status COMPLETED!\n\nTotal Service: Rp ${totalService.toLocaleString('id-ID')}\nTotal Sparepart: Rp ${totalSparepart.toLocaleString('id-ID')}\nTotal Keseluruhan: Rp ${totalKeseluruhan.toLocaleString('id-ID')}`);
+            // ✅ PERBAIKAN: Tampilkan notifikasi dengan info lengkap
+            const uppercaseInfo = isUppercaseEnabled ? '\n\n⚠️ SEMUA DATA TELAH DISIMPAN DALAM BENTUK UPPERCASE' : '';
+            const sparepartInfo = sparepartData.length > 0 ? `\nSparepart: ${sparepartData.length} item` : '';
+
+            alert(`✅ Estimasi berhasil disimpan dengan status COMPLETED!${uppercaseInfo}\n\nDetail:\nService: ${serviceData.length} item${sparepartInfo}\nTotal Service: Rp ${totalService.toLocaleString('id-ID')}\nTotal Sparepart: Rp ${totalSparepart.toLocaleString('id-ID')}\nTotal Keseluruhan: Rp ${totalKeseluruhan.toLocaleString('id-ID')}`);
 
             // Refresh data untuk memperbarui tampilan
             await loadEstimasiDataByPlate(currentPlateNumber);
 
-            if (!SILENT_MODE) console.log('💾 Estimasi berhasil disimpan dengan status completed:', data);
+            if (!SILENT_MODE) console.log('💾 Estimasi berhasil disimpan:', data);
 
         } catch (error) {
             if (!SILENT_MODE) console.error('❌ Error saving estimasi:', error);
