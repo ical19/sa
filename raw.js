@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Toyota CRM Notifikasi Estimasi - Tab Interface
+// @name         Toyota CRM Notifikasi Estimasi - Tab Interface Optimized
 // @namespace    http://tampermonkey.net/
-// @version      2.0
-// @description  Notifikasi estimasi dengan Firebase realtime - Tab Interface
+// @version      2.1
+// @description  Notifikasi estimasi dengan Firebase realtime - Tab Interface Optimized
 // @author       You
 // @match        https://tunastoyota.crm5.dynamics.com/*
 // @grant        GM_addStyle
@@ -437,6 +437,11 @@ GM_addStyle(`
     .estimasi-content {
         padding: 8px 0;
     }
+
+    /* PERBAIKAN: Tombol aksi yang sudah aktif */
+    .action-buttons.visible {
+        display: flex;
+    }
 `);
 
 (function() {
@@ -444,6 +449,15 @@ GM_addStyle(`
 
     // 🔇 SILENT MODE - Nonaktifkan logging yang mengganggu
     const SILENT_MODE = true;
+
+    // Konfigurasi Optimasi
+    const OPTIMIZATION_CONFIG = {
+        debounceTime: 1000,
+        cacheExpiry: 2 * 60 * 1000, // 2 menit cache
+        minFetchInterval: 30 * 1000, // 30 detik minimal interval fetch
+        badgeFields: ['id', 'nopol', 'status'], // Field minimal untuk badge
+        panelFields: 'id, nopol, jenis_mobil, komponen, created_at, teknisi_id, status, service_advisor, users:teknisi_id(full_name, email)' // Field untuk panel
+    };
 
     // Override console.log untuk mengurangi noise
     const originalLog = console.log;
@@ -479,6 +493,17 @@ GM_addStyle(`
     let isPanelOpen = false;
     let isRealtimeConnected = false;
     let currentEstimasiId = null;
+
+    // VARIABLE OPTIMASI BARU
+    let notificationCache = {
+        count: 0,
+        data: [],
+        timestamp: 0
+    };
+    let lastFetchTime = 0;
+    let fetchTimeout = null;
+    let isFetching = false;
+
     let debugInfo = {
         lastFetch: null,
         totalRecords: 0,
@@ -489,7 +514,281 @@ GM_addStyle(`
         sqlQuery: ''
     };
 
-    // ==================== FUNGSI YANG SAMA DARI KODE LAMA ====================
+    // ==================== FUNGSI OPTIMIZED ====================
+
+    // PERBAIKAN 1: Fungsi fetchNotifications yang dioptimasi
+    async function fetchNotifications(forceRefresh = false) {
+        const now = Date.now();
+
+        // ✅ Gunakan cache jika tidak force refresh dan cache masih valid
+        if (!forceRefresh &&
+            notificationCache.timestamp &&
+            (now - notificationCache.timestamp) < OPTIMIZATION_CONFIG.cacheExpiry) {
+            updateBadgeDisplay(notificationCache.count);
+            return notificationCache.data;
+        }
+
+        // ✅ Prevent too frequent calls
+        if (isFetching || (now - lastFetchTime) < OPTIMIZATION_CONFIG.minFetchInterval) {
+            return notificationCache.data;
+        }
+
+        isFetching = true;
+        const badge = document.querySelector('.notification-badge');
+
+        try {
+            // ✅ Tampilkan loading spinner
+            if (badge) {
+                badge.innerHTML = '<div class="loading-spinner"></div>';
+                badge.style.background = 'transparent';
+            }
+
+            // ✅ OPTIMIZED QUERY: Hanya ambil field yang diperlukan untuk badge
+            const { count, error } = await supabase
+                .from('estimasi')
+                .select('id', {
+                    count: 'exact',
+                    head: true
+                })
+                .eq('status', 'sent')
+                .eq('service_advisor', SERVICE_ADVISOR);
+
+            if (error) throw error;
+
+            const notificationCount = count || 0;
+
+            // ✅ Update cache
+            notificationCache = {
+                count: notificationCount,
+                data: Array(notificationCount).fill({}), // Simulasi data untuk kompatibilitas
+                timestamp: now
+            };
+
+            lastFetchTime = now;
+            debugInfo.lastFetch = new Date();
+            debugInfo.totalRecords = notificationCount;
+
+            // ✅ Update badge display
+            updateBadgeDisplay(notificationCount);
+
+            logDebug(`Notifications fetched: ${notificationCount}`, null, 'info');
+
+            return notificationCache.data;
+
+        } catch (error) {
+            logDebug('Error fetching notifications:', error, 'error');
+            debugInfo.error = error.message;
+
+            // ✅ Fallback ke cache saat error
+            updateBadgeDisplay(notificationCache.count);
+            return notificationCache.data;
+        } finally {
+            isFetching = false;
+        }
+    }
+
+    // PERBAIKAN 2: Fungsi update badge yang proper
+    function updateBadgeDisplay(count) {
+        notifications = notificationCache.data;
+
+        const helpButton = document.getElementById('helpLauncher-button');
+        if (!helpButton) return;
+
+        let iconContainer = helpButton.querySelector('.paper-icon-container');
+        if (!iconContainer) {
+            iconContainer = document.createElement('span');
+            iconContainer.className = 'paper-icon-container';
+
+            const iconSpan = helpButton.querySelector('.Help-symbol');
+            if (iconSpan) {
+                iconSpan.parentNode.replaceChild(iconContainer, iconSpan);
+            } else {
+                helpButton.appendChild(iconContainer);
+            }
+        }
+
+        // ✅ Build HTML secara langsung dengan kondisi yang tepat
+        iconContainer.innerHTML = `
+            <span class="material-icons paper-icon" style="color: ${count > 0 ? 'white' : '#ccc'}">
+                description
+            </span>
+            ${count > 0 ?
+                `<span class="notification-badge">${count}</span>` :
+                ''
+            }
+        `;
+
+        // ✅ Setup event listener
+        helpButton.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleNotificationPanel();
+        };
+
+        logDebug('Badge updated', { count, notifications: notifications.length });
+    }
+
+    // PERBAIKAN 3: Debounced fetch untuk efisiensi
+    function fetchNotificationsDebounced(force = false) {
+        if (fetchTimeout) {
+            clearTimeout(fetchTimeout);
+        }
+
+        fetchTimeout = setTimeout(() => {
+            fetchNotifications(force);
+        }, OPTIMIZATION_CONFIG.debounceTime);
+    }
+
+    // PERBAIKAN 4: Optimized Firebase Realtime Listener
+    function setupFirebaseRealtime() {
+        try {
+            const notificationsRef = firebaseDb.ref(`notifications/${SERVICE_ADVISOR}`);
+
+            notificationsRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+
+                if (data && data.trigger === true && data.service_advisor === SERVICE_ADVISOR) {
+                    // ✅ Force refresh dengan debounce
+                    fetchNotificationsDebounced(true);
+
+                    // ✅ Trigger badge blinking
+                    triggerBadgeBlinking();
+
+                    if (data.nopol) {
+                        showFirebaseToast(`Estimasi baru: ${data.nopol}`);
+                    } else {
+                        showFirebaseToast('Estimasi baru diterima dari teknisi!');
+                    }
+
+                    // ✅ Reset trigger di Firebase
+                    setTimeout(() => {
+                        notificationsRef.update({
+                            trigger: false,
+                            processed_at: new Date().toISOString(),
+                            processed_by: SERVICE_ADVISOR
+                        });
+                    }, 1000);
+                }
+            });
+
+            debugInfo.realtimeStatus = 'connected';
+            logDebug('Firebase realtime listener setup', null, 'info');
+            return true;
+        } catch (error) {
+            debugInfo.realtimeStatus = 'error';
+            logDebug('Error setting up Firebase realtime:', error, 'error');
+            return false;
+        }
+    }
+
+    // PERBAIKAN 5: Fix double click issue pada tab semua estimasi
+    function updateAllEstimasiPanel(estimasiData) {
+        const notificationList = document.getElementById('notificationListAll');
+        if (!notificationList) return;
+
+        if (estimasiData.length === 0) {
+            notificationList.innerHTML = `
+                <li class="empty-state">
+                    <span class="material-icons" style="font-size: 48px; color: #ccc; margin-bottom: 16px;">description</span>
+                    <div>Tidak ada estimasi dalam 5 hari terakhir</div>
+                </li>
+            `;
+            return;
+        }
+
+        notificationList.innerHTML = '';
+        estimasiData.forEach(estimasi => {
+            const li = document.createElement('li');
+            li.className = 'notification-item estimasi-item';
+            li.setAttribute('data-id', estimasi.id);
+
+            const status = estimasi.status || 'draft';
+            const statusText = status === 'sent' ? 'Menunggu Harga' :
+            status === 'completed' ? 'Selesai' : 'Draft';
+            const statusClass = `status-${status}`;
+
+            li.innerHTML = `
+                <div class="estimasi-content">
+                    <div class="vehicle-info">
+                        <span>TOYOTA ${estimasi.jenis_mobil || 'Unknown'} ${estimasi.nopol || 'No Plate'}</span>
+                        <span class="notification-status ${statusClass}">${statusText}</span>
+                    </div>
+                    <div class="components-list">
+                        ${Array.isArray(estimasi.komponen) ? estimasi.komponen.join(', ') : (estimasi.komponen || 'No components')}
+                    </div>
+                    <div class="technician-date">
+                        <span>${estimasi.users?.full_name || 'Belum ada teknisi'}</span>
+                        <span>${formatDate(estimasi.created_at)}</span>
+                    </div>
+                </div>
+                <div class="action-buttons">
+                    ${status === 'completed' ? `
+                    <button class="action-btn edit-btn" data-id="${estimasi.id}">
+                        <span class="material-icons" style="font-size: 14px;">edit</span>
+                        Edit Status
+                    </button>
+                    ` : ''}
+                    <button class="action-btn print-btn" data-id="${estimasi.id}">
+                        <span class="material-icons" style="font-size: 14px;">print</span>
+                        Print
+                    </button>
+                </div>
+            `;
+
+            // ✅ PERBAIKAN: Fix double click issue - gunakan event delegation yang lebih baik
+            const estimasiContent = li.querySelector('.estimasi-content');
+            const actionButtons = li.querySelector('.action-buttons');
+
+            // Event untuk menampilkan/sembunyikan tombol aksi
+            estimasiContent.addEventListener('click', function(e) {
+                // Jangan trigger jika klik tombol aksi
+                if (e.target.closest('.action-btn')) return;
+
+                // Sembunyikan semua tombol aksi lainnya
+                document.querySelectorAll('.action-buttons').forEach(btn => {
+                    if (btn !== actionButtons) {
+                        btn.classList.remove('visible');
+                        btn.style.display = 'none';
+                    }
+                });
+
+                // Toggle tombol aksi saat ini
+                const isVisible = actionButtons.classList.contains('visible');
+                if (isVisible) {
+                    actionButtons.classList.remove('visible');
+                    actionButtons.style.display = 'none';
+                } else {
+                    actionButtons.classList.add('visible');
+                    actionButtons.style.display = 'flex';
+                }
+            });
+
+            // Event listener untuk tombol edit
+            const editBtn = li.querySelector('.edit-btn');
+            if (editBtn) {
+                editBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const estimasiId = e.target.closest('.edit-btn').getAttribute('data-id');
+                    await changeStatusToSent(estimasiId);
+                });
+            }
+
+            // Event listener untuk tombol print
+            const printBtn = li.querySelector('.print-btn');
+            if (printBtn) {
+                printBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    currentEstimasiId = e.target.closest('.print-btn').getAttribute('data-id');
+                    generatePdfA5();
+                });
+            }
+
+            notificationList.appendChild(li);
+        });
+    }
+
+    // ==================== FUNGSI YANG TETAP SAMA ====================
+
     // Fungsi untuk convert URL ke base64
     function getBase64FromUrl(url) {
         return new Promise((resolve, reject) => {
@@ -526,26 +825,7 @@ GM_addStyle(`
         return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
     }
 
-    // PERBAIKAN: Fungsi untuk mendapatkan nomor WhatsApp dengan handling error
-    function getWhatsAppNumber(serviceAdvisor) {
-        // Pastikan serviceAdvisor adalah string
-        const advisorName = String(serviceAdvisor || 'Abdul Azis').trim();
-
-        const whatsappNumbers = {
-            'Abdul Azis': '087889077123',
-            'Akbarudin': '085899345191',
-            'Muhammad Hakiki': '081806274120',
-            'Ade Purwanto': '081999704850',
-            'Ahmad Baidowi': '081999704850'
-        };
-
-        const number = whatsappNumbers[advisorName] || '081315389866';
-
-        // Pastikan return value adalah string
-        return String(number);
-    }
-
-    // ATAU versi yang lebih safe:
+    // Fungsi untuk mendapatkan nomor WhatsApp
     function getWhatsAppNumber(serviceAdvisor) {
         try {
             const advisorName = String(serviceAdvisor || 'Abdul Azis').trim();
@@ -560,24 +840,20 @@ GM_addStyle(`
 
             let number = whatsappNumbers[advisorName];
 
-            // Jika tidak ditemukan, coba match partial
             if (!number) {
                 const keys = Object.keys(whatsappNumbers);
                 const foundKey = keys.find(key =>
-                                           advisorName.toLowerCase().includes(key.toLowerCase()) ||
-                                           key.toLowerCase().includes(advisorName.toLowerCase())
-                                          );
+                    advisorName.toLowerCase().includes(key.toLowerCase()) ||
+                    key.toLowerCase().includes(advisorName.toLowerCase())
+                );
                 number = foundKey ? whatsappNumbers[foundKey] : '081315389866';
             }
 
-            // Validasi nomor
             if (typeof number !== 'string') {
                 number = String(number);
             }
 
-            // Hapus karakter non-digit
             number = number.replace(/\D/g, '');
-
             return number || '081315389866';
 
         } catch (error) {
@@ -586,7 +862,7 @@ GM_addStyle(`
         }
     }
 
-    // Fungsi generate PDF A5
+    // FUNGSI GENERATE PDF A5 YANG LENGKAP (dari kode lama)
     async function generatePdfA5(format = 'A5') {
         try {
             if (!currentEstimasiId) {
@@ -595,10 +871,10 @@ GM_addStyle(`
             }
 
             const { data, error } = await supabase
-            .from('estimasi')
-            .select('*')
-            .eq('id', currentEstimasiId)
-            .single();
+                .from('estimasi')
+                .select('*')
+                .eq('id', currentEstimasiId)
+                .single();
 
             if (error) throw error;
 
@@ -667,23 +943,17 @@ GM_addStyle(`
             // Hitung total harga keseluruhan
             const totalHargaKeseluruhan = totalHargaSparepart + totalHargaService;
 
-            // PERBAIKAN: Handle foto URL - parsing yang lebih robust
+            // Handle foto URL
             let fotoArray = [];
             let fotoImages = [];
             if (data.foto_url) {
                 try {
-                    console.log('Raw foto_url:', data.foto_url); // Debug log
-
-                    // PERBAIKAN: Handle berbagai format foto_url
                     if (typeof data.foto_url === 'string') {
-                        // Coba parse sebagai JSON string
                         try {
                             const parsed = JSON.parse(data.foto_url);
                             fotoArray = Array.isArray(parsed) ? parsed : [];
                         } catch (e) {
-                            // Jika gagal parse, coba split oleh koma atau treat sebagai single URL
                             if (data.foto_url.includes('[') && data.foto_url.includes(']')) {
-                                // Clean the string and try to parse again
                                 const cleanString = data.foto_url.replace(/\\/g, '').replace(/"/g, '"');
                                 try {
                                     const reparsed = JSON.parse(cleanString);
@@ -697,31 +967,23 @@ GM_addStyle(`
                         }
                     } else if (Array.isArray(data.foto_url)) {
                         fotoArray = data.foto_url;
-                    } else {
-                        fotoArray = [];
                     }
-
-                    console.log('Parsed fotoArray:', fotoArray); // Debug log
 
                     // Convert foto URLs ke base64 untuk PDF
                     if (fotoArray.length > 0) {
                         for (const fotoUrl of fotoArray) {
                             try {
-                                // PERBAIKAN: Validasi URL sebelum convert
                                 if (fotoUrl && typeof fotoUrl === 'string' && fotoUrl.startsWith('http')) {
                                     const base64Image = await getBase64FromUrl(fotoUrl);
                                     fotoImages.push(base64Image);
-                                    console.log('Successfully converted image:', fotoUrl); // Debug log
                                 }
                             } catch (error) {
                                 console.error('Error converting image to base64:', error, 'URL:', fotoUrl);
                             }
                         }
                     }
-
-                    console.log('Final fotoImages count:', fotoImages.length); // Debug log
                 } catch (e) {
-                    console.error('Error parsing foto_url:', e, 'Raw data:', data.foto_url);
+                    console.error('Error parsing foto_url:', e);
                     fotoArray = [];
                 }
             }
@@ -743,6 +1005,7 @@ GM_addStyle(`
             const tunasLogo = await getBase64FromUrl(
                 "https://pjawwektzazcxakgopou.supabase.co/storage/v1/object/public/static/tunas.png"
             );
+
             // Siapkan content PDF
             const content = [
                 { text: 'Estimasi Saran Perbaikan', alignment: 'center', fontSize: 12, margin: [0, 0, 0, 12] },
@@ -809,7 +1072,7 @@ GM_addStyle(`
                             ],
                             ...serviceData.map(service => {
                                 return [
-                                    truncateText(service.name || '-', 30),
+                                    truncateText(service.desc || '-', 30),
                                     service.hour || service.jam || 0,
                                     formatRupiah(service.price || service.harga || 0),
                                     formatRupiah(service.total || service.subtotal || 0)
@@ -938,7 +1201,6 @@ GM_addStyle(`
                                                 bold: true,
                                                 fontSize: 10
                                             },
-
                                             {
                                                 margin: [0, 2, 0, 0],
                                                 columns: [
@@ -1006,7 +1268,6 @@ GM_addStyle(`
         }
     }
 
-    // 1. Fungsi logDebug (dengan modifikasi silent mode)
     function logDebug(message, data = null, level = 'debug') {
         if (SILENT_MODE) return;
 
@@ -1019,7 +1280,6 @@ GM_addStyle(`
         }
     }
 
-    // 2. Fungsi initializeSupabase()
     async function initializeSupabase() {
         try {
             supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -1043,7 +1303,6 @@ GM_addStyle(`
         }
     }
 
-    // 3. Fungsi initializeFirebase()
     function initializeFirebase() {
         try {
             firebaseApp = firebase.initializeApp(FIREBASE_CONFIG);
@@ -1058,30 +1317,17 @@ GM_addStyle(`
         }
     }
 
-    // 4. Fungsi triggerBadgeBlinking()
     function triggerBadgeBlinking() {
-        fetchNotifications().then(() => {
-            const badge = document.querySelector('.notification-badge');
-            if (badge) {
-                badge.classList.add('badge-blinking');
-                setTimeout(() => {
-                    badge.classList.remove('badge-blinking');
-                }, 10000);
-                logDebug('Badge blinking triggered via Firebase');
-            } else {
-                changeHelpIcon();
-                const newBadge = document.querySelector('.notification-badge');
-                if (newBadge) {
-                    newBadge.classList.add('badge-blinking');
-                    setTimeout(() => {
-                        newBadge.classList.remove('badge-blinking');
-                    }, 10000);
-                }
-            }
-        });
+        const badge = document.querySelector('.notification-badge');
+        if (badge) {
+            badge.classList.add('badge-blinking');
+            setTimeout(() => {
+                badge.classList.remove('badge-blinking');
+            }, 10000);
+            logDebug('Badge blinking triggered via Firebase');
+        }
     }
 
-    // 5. Fungsi showFirebaseToast()
     function showFirebaseToast(message, type = 'success') {
         const toast = document.createElement('div');
         toast.className = `firebase-toast ${type === 'error' ? 'error' : ''}`;
@@ -1109,7 +1355,6 @@ GM_addStyle(`
         }, 5000);
     }
 
-    // 6. Fungsi loadMaterialIcons()
     function loadMaterialIcons() {
         const link = document.createElement('link');
         link.href = 'https://fonts.googleapis.com/icon?family=Material+Icons';
@@ -1118,7 +1363,6 @@ GM_addStyle(`
         logDebug('Material Icons loaded');
     }
 
-    // 7. Fungsi closePanelOnClickOutside()
     function closePanelOnClickOutside(e) {
         const panel = document.querySelector('.notification-panel');
         if (panel && isPanelOpen && !panel.contains(e.target)) {
@@ -1129,73 +1373,31 @@ GM_addStyle(`
         }
     }
 
-    // 8. Fungsi handleEscapeKey()
     function handleEscapeKey(e) {
         if (e.key === 'Escape' && isPanelOpen) {
             closeNotificationPanel();
         }
     }
 
-    // 9. Fungsi closeNotificationPanel()
     function closeNotificationPanel() {
         const panel = document.querySelector('.notification-panel');
         if (panel) {
             panel.style.display = 'none';
             isPanelOpen = false;
+            // Sembunyikan semua tombol aksi saat panel ditutup
+            document.querySelectorAll('.action-buttons').forEach(btn => {
+                btn.classList.remove('visible');
+                btn.style.display = 'none';
+            });
         }
     }
 
-    // 10. Fungsi changeHelpIcon()
-    function changeHelpIcon() {
-        const helpButton = document.getElementById('helpLauncher-button');
-
-        if (helpButton) {
-            let iconContainer = helpButton.querySelector('.paper-icon-container');
-
-            if (!iconContainer) {
-                iconContainer = document.createElement('span');
-                iconContainer.className = 'paper-icon-container';
-
-                const iconSpan = helpButton.querySelector('.Help-symbol');
-                if (iconSpan) {
-                    iconSpan.parentNode.replaceChild(iconContainer, iconSpan);
-                } else {
-                    helpButton.appendChild(iconContainer);
-                }
-            }
-
-            iconContainer.innerHTML = '';
-
-            const materialIcon = document.createElement('span');
-            materialIcon.className = 'material-icons paper-icon';
-            materialIcon.textContent = 'description';
-            materialIcon.style.color = notifications.length > 0 ? 'white' : '#ccc';
-
-            iconContainer.appendChild(materialIcon);
-
-            if (notifications.length > 0) {
-                const badge = document.createElement('span');
-                badge.className = 'notification-badge';
-                badge.textContent = notifications.length;
-                iconContainer.appendChild(badge);
-            }
-
-            helpButton.onclick = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                toggleNotificationPanel();
-            };
-
-            logDebug('Help icon updated', { notifications: notifications.length });
-        }
-    }
-
-    // 11. Fungsi toggleNotificationPanel()
     function toggleNotificationPanel() {
         const panel = document.querySelector('.notification-panel') || createNotificationPanel();
-        const notificationListSent = document.getElementById('notificationListSent');
 
         if (!isPanelOpen) {
+            // ✅ Force refresh data saat panel dibuka
+            fetchNotifications(true);
             loadSentNotifications();
             updateDebugInfo();
             panel.style.display = 'block';
@@ -1205,7 +1407,6 @@ GM_addStyle(`
         }
     }
 
-    // 12. Fungsi formatDate()
     function formatDate(dateString) {
         if (!dateString) return 'Invalid Date';
         try {
@@ -1216,7 +1417,6 @@ GM_addStyle(`
         }
     }
 
-    // 13. Fungsi parseKomponen()
     function parseKomponen(komponenData) {
         if (!komponenData) return [];
 
@@ -1233,15 +1433,6 @@ GM_addStyle(`
         return [];
     }
 
-    // 14. SEMUA FUNGSI PDF GENERATION (getBase64FromUrl, formatRupiah, truncateText, generatePdfA5)
-    // SALIN SEMUA FUNGSI PDF DARI KODE LAMA ANDA:
-
-    // - getBase64FromUrl(url)
-    // - formatRupiah(amount)
-    // - truncateText(text, maxLength)
-    // - generatePdfA5(format = 'A5')
-
-    // 15. Fungsi waitForHelpButton()
     async function waitForHelpButton() {
         return new Promise((resolve) => {
             const checkButton = () => {
@@ -1258,44 +1449,7 @@ GM_addStyle(`
         });
     }
 
-    // ==================== FUNGSI BARU YANG DIPERBAIKI ====================
-
-    // PERBAIKAN 1: Firebase Realtime Listener
-    function setupFirebaseRealtime() {
-        try {
-            const notificationsRef = firebaseDb.ref(`notifications/${SERVICE_ADVISOR}`);
-
-            notificationsRef.on('value', (snapshot) => {
-                const data = snapshot.val();
-
-                if (data && data.trigger === true && data.service_advisor === SERVICE_ADVISOR) {
-                    triggerBadgeBlinking();
-
-                    if (data.nopol) {
-                        showFirebaseToast(`Estimasi baru: ${data.nopol}`);
-                    } else {
-                        showFirebaseToast('Estimasi baru diterima dari teknisi!');
-                    }
-
-                    setTimeout(() => {
-                        notificationsRef.update({
-                            trigger: false,
-                            processed_at: new Date().toISOString(),
-                            processed_by: SERVICE_ADVISOR
-                        });
-                    }, 1000);
-                }
-            });
-
-            logDebug('Firebase realtime listener setup', null, 'info');
-            return true;
-        } catch (error) {
-            logDebug('Error setting up Firebase realtime:', error, 'error');
-            return false;
-        }
-    }
-
-    // PERBAIKAN 2: Panel Notifikasi dengan Tab Interface
+    // PERBAIKAN: Panel Notifikasi dengan Tab Interface
     function createNotificationPanel() {
         const panel = document.createElement('div');
         panel.className = 'notification-panel';
@@ -1340,7 +1494,6 @@ GM_addStyle(`
         return panel;
     }
 
-    // PERBAIKAN 3: Setup Tab Listeners
     function setupTabListeners(panel) {
         const tabButtons = panel.querySelectorAll('.tab-button');
         const tabPanes = panel.querySelectorAll('.tab-pane');
@@ -1364,18 +1517,14 @@ GM_addStyle(`
         });
     }
 
-    // PERBAIKAN 4: Load Notifikasi Sent
     async function loadSentNotifications() {
         try {
             const { data: estimasiData, error } = await supabase
-            .from('estimasi')
-            .select(`
-                    *,
-                    users:teknisi_id (full_name, email)
-                `)
-            .eq('status', 'sent')
-            .eq('service_advisor', SERVICE_ADVISOR)
-            .order('created_at', { ascending: false });
+                .from('estimasi')
+                .select(OPTIMIZATION_CONFIG.panelFields)
+                .eq('status', 'sent')
+                .eq('service_advisor', SERVICE_ADVISOR)
+                .order('created_at', { ascending: false });
 
             if (error) throw error;
 
@@ -1390,7 +1539,6 @@ GM_addStyle(`
         }
     }
 
-    // PERBAIKAN 5: Load Semua Estimasi (hanya sent & completed)
     async function loadAllEstimasi() {
         try {
             const fiveDaysAgo = new Date();
@@ -1398,15 +1546,12 @@ GM_addStyle(`
             const fiveDaysAgoStr = fiveDaysAgo.toISOString();
 
             const { data: estimasiData, error } = await supabase
-            .from('estimasi')
-            .select(`
-                    *,
-                    users:teknisi_id (full_name, email)
-                `)
-            .eq('service_advisor', SERVICE_ADVISOR)
-            .in('status', ['sent', 'completed'])
-            .gte('created_at', fiveDaysAgoStr)
-            .order('created_at', { ascending: false });
+                .from('estimasi')
+                .select(OPTIMIZATION_CONFIG.panelFields)
+                .eq('service_advisor', SERVICE_ADVISOR)
+                .in('status', ['sent', 'completed'])
+                .gte('created_at', fiveDaysAgoStr)
+                .order('created_at', { ascending: false });
 
             if (error) throw error;
 
@@ -1421,7 +1566,6 @@ GM_addStyle(`
         }
     }
 
-    // PERBAIKAN 6: Update Panel Sent Notifications
     function updateSentNotificationsPanel(sentNotifications) {
         const notificationList = document.getElementById('notificationListSent');
         if (!notificationList) return;
@@ -1464,99 +1608,6 @@ GM_addStyle(`
         });
     }
 
-    // PERBAIKAN 7: Update Panel All Estimasi dengan Tombol Aksi
-    function updateAllEstimasiPanel(estimasiData) {
-        const notificationList = document.getElementById('notificationListAll');
-        if (!notificationList) return;
-
-        if (estimasiData.length === 0) {
-            notificationList.innerHTML = `
-                <li class="empty-state">
-                    <span class="material-icons" style="font-size: 48px; color: #ccc; margin-bottom: 16px;">description</span>
-                    <div>Tidak ada estimasi dalam 5 hari terakhir</div>
-                </li>
-            `;
-            return;
-        }
-
-        notificationList.innerHTML = '';
-        estimasiData.forEach(estimasi => {
-            const li = document.createElement('li');
-            li.className = 'notification-item estimasi-item';
-            li.setAttribute('data-id', estimasi.id);
-
-            const status = estimasi.status || 'draft';
-            const statusText = status === 'sent' ? 'Menunggu Harga' :
-            status === 'completed' ? 'Selesai' : 'Draft';
-            const statusClass = `status-${status}`;
-
-            li.innerHTML = `
-                <div class="estimasi-content">
-                    <div class="vehicle-info">
-                        <span>TOYOTA ${estimasi.jenis_mobil || 'Unknown'} ${estimasi.nopol || 'No Plate'}</span>
-                        <span class="notification-status ${statusClass}">${statusText}</span>
-                    </div>
-                    <div class="components-list">
-                        ${Array.isArray(estimasi.komponen) ? estimasi.komponen.join(', ') : (estimasi.komponen || 'No components')}
-                    </div>
-                    <div class="technician-date">
-                        <span>${estimasi.users?.full_name || 'Belum ada teknisi'}</span>
-                        <span>${formatDate(estimasi.created_at)}</span>
-                    </div>
-                </div>
-                <div class="action-buttons">
-                    ${status === 'completed' ? `
-                    <button class="action-btn edit-btn" data-id="${estimasi.id}">
-                        <span class="material-icons" style="font-size: 14px;">edit</span>
-                        Edit Status
-                    </button>
-                    ` : ''}
-                    <button class="action-btn print-btn" data-id="${estimasi.id}">
-                        <span class="material-icons" style="font-size: 14px;">print</span>
-                        Print
-                    </button>
-                </div>
-            `;
-
-            // Event listener untuk klik item (tampilkan/sembunyikan tombol)
-            li.querySelector('.estimasi-content').addEventListener('click', function(e) {
-                if (e.target.closest('.action-btn')) return;
-
-                const actionButtons = li.querySelector('.action-buttons');
-                const isVisible = actionButtons.style.display !== 'none';
-
-                document.querySelectorAll('.action-buttons').forEach(btn => {
-                    btn.style.display = 'none';
-                });
-
-                actionButtons.style.display = isVisible ? 'none' : 'flex';
-            });
-
-            // Event listener untuk tombol edit
-            const editBtn = li.querySelector('.edit-btn');
-            if (editBtn) {
-                editBtn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    const estimasiId = e.target.closest('.edit-btn').getAttribute('data-id');
-                    await changeStatusToSent(estimasiId);
-                });
-            }
-
-            // Event listener untuk tombol print
-            const printBtn = li.querySelector('.print-btn');
-            if (printBtn) {
-                printBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    currentEstimasiId = e.target.closest('.print-btn').getAttribute('data-id');
-                    generatePdfA5();
-                });
-            }
-
-            notificationList.appendChild(li);
-        });
-    }
-
-    // PERBAIKAN 8: Fungsi Ubah Status ke Sent
     async function changeStatusToSent(estimasiId) {
         if (!confirm('Ubah status estimasi menjadi "Menunggu Harga Jasa"? Estimasi akan muncul di tab Menunggu Harga Jasa.')) {
             return;
@@ -1564,19 +1615,22 @@ GM_addStyle(`
 
         try {
             const { data, error } = await supabase
-            .from('estimasi')
-            .update({
-                status: 'sent',
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', estimasiId)
-            .select();
+                .from('estimasi')
+                .update({
+                    status: 'sent',
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', estimasiId)
+                .select();
 
             if (error) throw error;
 
             logDebug('Status changed to sent:', data, 'info');
 
+            // Refresh data
             await loadAllEstimasi();
+            // Refresh badge
+            fetchNotificationsDebounced(true);
 
             const estimasiItem = document.querySelector(`.estimasi-item[data-id="${estimasiId}"]`);
             if (estimasiItem) {
@@ -1592,7 +1646,6 @@ GM_addStyle(`
         }
     }
 
-    // PERBAIKAN 9: Fungsi Buka Work Order
     async function openWorkOrderByPlate(nopol) {
         if (!nopol) return alert('Nomor polisi tidak ditemukan.');
 
@@ -1631,48 +1684,6 @@ GM_addStyle(`
         }
     }
 
-    // PERBAIKAN 10: Fetch Notifications (untuk badge count)
-    async function fetchNotifications() {
-        const badge = document.querySelector('.notification-badge');
-        if (badge) {
-            badge.innerHTML = '<div class="loading-spinner"></div>';
-            badge.style.background = 'transparent';
-        }
-
-        try {
-            const { data: estimasiData, error } = await supabase
-            .from('estimasi')
-            .select(`
-                *,
-                users:teknisi_id (full_name, email)
-            `)
-            .eq('status', 'sent')
-            .eq('service_advisor', SERVICE_ADVISOR)
-            .order('created_at', { ascending: false });
-
-            if (error) throw error;
-
-            if (estimasiData && Array.isArray(estimasiData)) {
-                notifications = estimasiData.map(estimasi => ({
-                    ...estimasi,
-                    teknisi: estimasi.teknisi_id?.full_name || estimasi.users?.full_name || 'Belum ada teknisi',
-                    komponen: parseKomponen(estimasi.komponen)
-                }));
-
-                changeHelpIcon();
-            } else {
-                notifications = [];
-                changeHelpIcon();
-            }
-
-        } catch (error) {
-            logDebug('Error fetching SA data:', error, 'error');
-            notifications = [];
-            changeHelpIcon();
-        }
-    }
-
-    // PERBAIKAN 11: Update Debug Info
     function updateDebugInfo() {
         const debugElement = document.getElementById('debugInfo');
         if (debugElement) {
@@ -1696,6 +1707,10 @@ GM_addStyle(`
                         ${debugInfo.firebaseStatus}
                     </span>
                 </div>
+                <div class="debug-item">
+                    <span class="debug-label">Cache Status:</span>
+                    <span class="debug-value">${notificationCache.timestamp ? 'Active' : 'Inactive'}</span>
+                </div>
                 ${debugInfo.error ? `
                 <div class="debug-item">
                     <span class="debug-label">Status:</span>
@@ -1704,21 +1719,21 @@ GM_addStyle(`
                 ` : `
                 <div class="debug-item">
                     <span class="debug-label">Status:</span>
-                    <span class="debug-success">Connected</span>
+                    <span class="debug-success">Optimized & Connected</span>
                 </div>
                 `}
             `;
         }
     }
 
-    // PERBAIKAN 12: Inisialisasi dengan Conflict Resolution
+    // PERBAIKAN: Inisialisasi dengan Conflict Resolution
     async function init() {
         if (window.toyotaNotifScriptRunning) {
             return;
         }
         window.toyotaNotifScriptRunning = true;
 
-        logDebug('Initializing Toyota CRM Notifikasi dengan Tab Interface...', null, 'info');
+        logDebug('Initializing Toyota CRM Notifikasi dengan Optimizations...', null, 'info');
         loadMaterialIcons();
 
         if (document.readyState === 'loading') {
@@ -1743,16 +1758,17 @@ GM_addStyle(`
         }
 
         await waitForHelpButton();
-        await fetchNotifications();
+        await fetchNotifications(); // Initial fetch
         createNotificationPanel();
 
-        logDebug('Application with Tab Interface initialized successfully', null, 'info');
+        logDebug('Application with Optimizations initialized successfully', null, 'info');
     }
 
     // Cleanup
     window.addEventListener('beforeunload', () => {
         document.removeEventListener('click', closePanelOnClickOutside);
         document.removeEventListener('keydown', handleEscapeKey);
+        if (fetchTimeout) clearTimeout(fetchTimeout);
         window.toyotaNotifScriptRunning = false;
     });
 
@@ -1764,6 +1780,7 @@ GM_addStyle(`
             console.log('Firebase DB:', firebaseDb);
             console.log('Service Advisor:', SERVICE_ADVISOR);
             console.log('Firebase Status:', debugInfo.firebaseStatus);
+            console.log('Cache Status:', notificationCache);
         },
         testTrigger: function() {
             if (firebaseDb) {
@@ -1776,6 +1793,9 @@ GM_addStyle(`
                 });
                 console.log('✅ Firebase notification triggered for:', SERVICE_ADVISOR);
             }
+        },
+        forceRefresh: function() {
+            fetchNotifications(true);
         }
     };
 
