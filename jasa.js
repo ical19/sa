@@ -1879,158 +1879,270 @@
     }
 
     // FUNGSI BARU: Ambil data sparepart dari tabel yang sedang ditampilkan
+    // PERBAIKAN: Fungsi untuk Mengambil Data Sparepart dari Tabel dengan Availability
     function getSparepartDataFromTable() {
-        const sparepartRows = document.querySelectorAll('#sparepart-table-container tbody tr');
-        const sparepartData = [];
+        try {
+            const sparepartTableContainer = document.getElementById('sparepart-table-container');
+            if (!sparepartTableContainer) {
+                if (!SILENT_MODE) console.log('❌ Tabel sparepart tidak ditemukan');
+                return [];
+            }
 
-        sparepartRows.forEach((row, index) => {
-            // Skip row kosong
-            if (row.querySelector('td[colspan]')) return;
+            // Gunakan data dari currentEstimasi sebagai fallback untuk menjaga availability
+            let existingSparepartData = [];
+            if (currentEstimasi && currentEstimasi.sparepart_data) {
+                if (Array.isArray(currentEstimasi.sparepart_data)) {
+                    existingSparepartData = currentEstimasi.sparepart_data;
+                } else if (typeof currentEstimasi.sparepart_data === 'string') {
+                    try {
+                        existingSparepartData = JSON.parse(currentEstimasi.sparepart_data);
+                    } catch (e) {
+                        if (!SILENT_MODE) console.warn('⚠️ Gagal parse existing sparepart_data');
+                    }
+                }
+            }
 
-            const cells = row.querySelectorAll('td');
-            if (cells.length >= 5) {
-                const nameCell = cells[1];
-                const qtyCell = cells[2];
-                const priceCell = cells[3];
-                const totalCell = cells[4];
+            const sparepartRows = sparepartTableContainer.querySelectorAll('tbody tr');
+            const sparepartData = [];
+            const processedNames = new Set(); // Untuk menghindari duplikasi
 
-                let name = nameCell.textContent.trim();
-                const qty = parseInt(qtyCell.textContent) || 1;
-                const priceText = priceCell.textContent.replace('Rp ', '').replace(/\./g, '');
-                const price = parseFloat(priceText) || 0;
-                const totalText = totalCell.textContent.replace('Rp ', '').replace(/\./g, '');
-                const total = parseFloat(totalText) || 0;
-
-                // Terapkan uppercase jika mode aktif
-                if (isUppercaseEnabled && name) {
-                    name = name.toUpperCase();
+            sparepartRows.forEach((row, index) => {
+                // Skip row total dan row kosong
+                if (row.classList.contains('total-row') || row.querySelector('td[colspan]')) {
+                    return;
                 }
 
-                // Hanya tambahkan jika ada nama sparepart
-                if (name && name !== '-') {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 5) {
+                    const nameCell = cells[1];
+                    const qtyCell = cells[2];
+                    const priceCell = cells[3];
+                    const totalCell = cells[4];
+
+                    let name = nameCell.textContent.trim();
+                    const qtyText = qtyCell.textContent.trim();
+                    const priceText = priceCell.textContent.replace('Rp ', '').replace(/\./g, '').trim();
+                    const totalText = totalCell.textContent.replace('Rp ', '').replace(/\./g, '').trim();
+
+                    const qty = parseInt(qtyText) || 1;
+                    const price = parseFloat(priceText) || 0;
+                    const total = parseFloat(totalText) || 0;
+
+                    // Validasi data
+                    if (!name || name === '-' || name === 'Tidak ada data sparepart') {
+                        return;
+                    }
+
+                    // Terapkan uppercase jika mode aktif
+                    if (isUppercaseEnabled && name) {
+                        name = name.toUpperCase();
+                    }
+
+                    // Cegah duplikasi berdasarkan nama
+                    if (processedNames.has(name)) {
+                        if (!SILENT_MODE) console.log(`⏩ Skip duplikat: ${name}`);
+                        return;
+                    }
+                    processedNames.add(name);
+
+                    // Cari data existing untuk menjaga availability dan number
+                    const existingItem = existingSparepartData.find(item =>
+                                                                    item.name && name &&
+                                                                    item.name.toUpperCase() === name.toUpperCase()
+                                                                   );
+
                     sparepartData.push({
                         name: name,
-                        qty: qty,
+                        number: existingItem?.number || '', // Pertahankan number jika ada
                         price: price,
+                        availability: existingItem?.availability || '-', // Default availability
+                        qty: qty,
                         total: total
                     });
                 }
-            }
-        });
+            });
 
-        return sparepartData;
+            if (!SILENT_MODE) console.log('📦 Data sparepart siap disimpan:', sparepartData);
+            return sparepartData;
+
+        } catch (error) {
+            if (!SILENT_MODE) console.error('❌ Error getSparepartDataFromTable:', error);
+            return [];
+        }
+    }
+
+    // ✅ FUNGSI BARU: Sembunyikan container estimasi
+    function hideEstimasiContainer() {
+        const estimasiContainer = document.getElementById('estimasi-compact-container');
+        if (estimasiContainer) {
+            estimasiContainer.style.display = 'none';
+            if (!SILENT_MODE) console.log('✅ Container estimasi disembunyikan');
+
+            // Optional: Tampilkan pesan bahwa estimasi sudah disimpan
+            const mainButtonContainer = document.querySelector('.button-container, .ms-crm-List-ButtonBar, [class*="button"], [class*="Button"]');
+            if (mainButtonContainer) {
+                const successMessage = document.createElement('div');
+                successMessage.id = 'save-success-message';
+                successMessage.style.cssText = `
+                background: #d4edda;
+                color: #155724;
+                padding: 12px 16px;
+                border-radius: 6px;
+                border: 1px solid #c3e6cb;
+                margin: 16px;
+                font-weight: 500;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            `;
+                successMessage.innerHTML = `
+                ✅ Estimasi berhasil disimpan silahkan tutup tab ini
+                <button onclick="this.parentElement.remove()" style="background: none; border: none; font-size: 16px; cursor: pointer; margin-left: auto;">×</button>
+            `;
+
+                // Hapus pesan lama jika ada
+                const existingMessage = document.getElementById('save-success-message');
+                if (existingMessage) {
+                    existingMessage.remove();
+                }
+
+                mainButtonContainer.parentNode.insertBefore(successMessage, mainButtonContainer.nextSibling);
+            }
+        }
     }
 
     // PERBAIKAN 14: Save Estimasi dengan Data Sparepart yang Diperbarui
     async function saveEstimasi() {
         if (!currentEstimasi) {
-            alert('Tidak ada data estimasi yang tersedia');
+            alert('❌ Tidak ada data estimasi yang tersedia');
             return;
         }
 
         try {
-            if (!SILENT_MODE) console.log('💾 Menyimpan estimasi...');
-
-            // ✅ PERBAIKAN: Ambil data sparepart dari tabel yang sedang ditampilkan
+            // 1. Ambil data dengan cepat
             const sparepartData = getSparepartDataFromTable();
+            const serviceData = getServiceDataFromTable();
 
-            if (!SILENT_MODE) console.log('📦 Data sparepart dari tabel:', sparepartData);
-
-            // Ambil semua baris service
-            const serviceRows = document.querySelectorAll('#service-tbody tr:not(.total-row)');
-            const serviceData = [];
-
-            serviceRows.forEach(row => {
-                const name = row.querySelector('.service-name')?.value?.trim() || '';
-                const desc = row.querySelector('.service-desc')?.textContent?.trim() || '';
-                const hourInput = row.querySelector('.service-hour');
-                const priceDisplay = row.querySelector('.service-price-display');
-                const priceEdit = row.querySelector('.service-price-edit');
-                const finalCell = row.querySelector('.service-final');
-
-                // Skip jika nama service kosong
-                if (!name) return;
-
-                // Ambil jam kerja
-                const hour = parseFloat(hourInput?.value) || 0;
-
-                // Ambil harga
-                let price = 0;
-                if (priceEdit && priceEdit.style.display !== 'none') {
-                    price = parseFloat(priceEdit.value) || 0;
-                } else {
-                    const priceText = (priceDisplay?.textContent || '0').replace('Rp ', '').replace(/\./g, '');
-                    price = parseFloat(priceText) || 0;
-                }
-
-                // Ambil total final
-                const finalText = (finalCell?.textContent || '0').replace('Rp ', '').replace(/\./g, '');
-                const total = parseFloat(finalText) || 0;
-
-                // ✅ PERBAIKAN: Terapkan UPPERCASE jika aktif
-                let finalName = desc;  // desc menjadi name
-                let finalDesc = name;  // name menjadi desc
-
-                // Jika uppercase mode aktif, terapkan ke nama service
-                if (isUppercaseEnabled) {
-                    finalName = finalName.toUpperCase();
-                    finalDesc = finalDesc.toUpperCase();
-                }
-
-                serviceData.push({
-                    name: finalName,
-                    desc: finalDesc,
-                    hour: hour,
-                    price: price,
-                    qty: 1,
-                    total: total
-                });
-            });
-
-            if (serviceData.length === 0 && sparepartData.length === 0) {
-                alert('Tidak ada data jasa atau sparepart yang dapat disimpan.');
+            // 2. Validasi cepat
+            if (serviceData.length === 0) {
+                alert('❌ Tidak ada data service yang dapat disimpan.\n\nSilakan tambah data service terlebih dahulu.');
                 return;
             }
 
-            if (!SILENT_MODE) console.log('📦 Data yang akan disimpan:', {
-                service: serviceData,
-                sparepart: sparepartData
-            });
-
-            // Hitung total untuk notifikasi
-            const totalService = serviceData.reduce((sum, item) => sum + (item.total || 0), 0);
-            const totalSparepart = sparepartData.reduce((sum, item) => sum + (item.total || 0), 0);
+            // 3. Hitung total dengan efisien
+            const totalService = serviceData.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
+            const totalSparepart = sparepartData.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
             const totalKeseluruhan = totalService + totalSparepart;
 
-            // Update kolom service_data dan sparepart_data di tabel estimasi
-            const { data, error } = await supabase
-            .from('estimasi')
-            .update({
+            // 4. Update hanya field yang diperlukan
+            const updateData = {
                 service_data: serviceData,
-                sparepart_data: sparepartData, // ✅ PERBAIKAN: Gunakan data dari tabel, bukan dari currentEstimasi
+                sparepart_data: sparepartData,
                 total_harga: totalKeseluruhan,
                 status: 'completed',
                 updated_at: new Date().toISOString()
-            })
+            };
+
+            if (!SILENT_MODE) console.log('💾 Menyimpan data:', {
+                service_items: serviceData.length,
+                sparepart_items: sparepartData.length,
+                total: totalKeseluruhan
+            });
+
+            // 5. Eksekusi update ke Supabase
+            const { data, error } = await supabase
+            .from('estimasi')
+            .update(updateData)
             .eq('id', currentEstimasi.id)
             .select();
 
             if (error) throw error;
-
-            // ✅ PERBAIKAN: Tampilkan notifikasi dengan info lengkap
-            const uppercaseInfo = isUppercaseEnabled ? '\n\n⚠️ SEMUA DATA TELAH DISIMPAN DALAM BENTUK UPPERCASE' : '';
-            const sparepartInfo = sparepartData.length > 0 ? `\nSparepart: ${sparepartData.length} item` : '';
-
-            alert(`✅ Estimasi berhasil disimpan dengan status COMPLETED!${uppercaseInfo}\n\nDetail:\nService: ${serviceData.length} item${sparepartInfo}\nTotal Service: Rp ${totalService.toLocaleString('id-ID')}\nTotal Sparepart: Rp ${totalSparepart.toLocaleString('id-ID')}\nTotal Keseluruhan: Rp ${totalKeseluruhan.toLocaleString('id-ID')}`);
-
-            // Refresh data untuk memperbarui tampilan
-            await loadEstimasiDataByPlate(currentPlateNumber);
-
-            if (!SILENT_MODE) console.log('💾 Estimasi berhasil disimpan:', data);
+            await refreshCurrentEstimasi();
+            // 6. Notifikasi sukses
+            hideEstimasiContainer();
 
         } catch (error) {
             if (!SILENT_MODE) console.error('❌ Error saving estimasi:', error);
             alert('❌ Gagal menyimpan estimasi: ' + error.message);
+        }
+    }
+
+    // FUNGSI BARU: Ambil data service dari tabel dengan efisien
+    function getServiceDataFromTable() {
+        const serviceRows = document.querySelectorAll('#service-tbody tr:not(.total-row)');
+        const serviceData = [];
+
+        serviceRows.forEach(row => {
+            const name = row.querySelector('.service-name')?.value?.trim() || '';
+            const desc = row.querySelector('.service-desc')?.textContent?.trim() || '';
+            const hourInput = row.querySelector('.service-hour');
+            const priceEdit = row.querySelector('.service-price-edit');
+            const finalCell = row.querySelector('.service-final');
+
+            if (!name) return;
+
+            const hour = parseFloat(hourInput?.value) || 0;
+
+            // Ambil harga dengan logika yang sederhana
+            let price = 0;
+            if (priceEdit && priceEdit.style.display !== 'none') {
+                price = parseFloat(priceEdit.value) || 0;
+            } else {
+                const priceDisplay = row.querySelector('.service-price-display');
+                if (priceDisplay) {
+                    const priceText = priceDisplay.textContent.replace('Rp ', '').replace(/\./g, '');
+                    price = parseFloat(priceText) || 0;
+                }
+            }
+
+            const totalText = (finalCell?.textContent || '0').replace('Rp ', '').replace(/\./g, '');
+            const total = parseFloat(totalText) || 0;
+
+            // Terapkan UPPERCASE jika aktif
+            let finalName = desc;
+            let finalDesc = name;
+            if (isUppercaseEnabled) {
+                finalName = finalName.toUpperCase();
+                finalDesc = finalDesc.toUpperCase();
+            }
+
+            serviceData.push({
+                name: finalName,
+                desc: finalDesc,
+                hour: hour,
+                price: price,
+                qty: 1,
+                total: total
+            });
+        });
+
+        return serviceData;
+    }
+
+    // FUNGSI BARU: Refresh data currentEstimasi tanpa load ulang semua data
+    async function refreshCurrentEstimasi() {
+        try {
+            const { data, error } = await supabase
+            .from('estimasi')
+            .select('*')
+            .eq('id', currentEstimasi.id)
+            .single();
+
+            if (!error && data) {
+                currentEstimasi = data;
+                // Update teknisi name jika perlu
+                if (currentEstimasi.teknisi_id) {
+                    currentEstimasi.teknisi_name = await getTeknisiName(currentEstimasi.teknisi_id);
+                }
+
+                // Update tampilan
+                updateEstimasiDisplay();
+                updateStatusInfo();
+
+                if (!SILENT_MODE) console.log('✅ Data estimasi diperbarui');
+            }
+        } catch (error) {
+            if (!SILENT_MODE) console.error('❌ Error refresh current estimasi:', error);
         }
     }
 
