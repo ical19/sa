@@ -18,6 +18,63 @@
 // ==/UserScript==
 
 GM_addStyle(`
+// Tambahkan CSS ini di bagian GM_addStyle
+    /* CSS untuk loading indicator di tengah panel */
+    .tab-pane-loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 200px; /* Tinggi minimum untuk loading */
+    }
+
+    .loading-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 20px;
+        color: #666;
+    }
+
+    .loading-spinner-large {
+        width: 32px;
+        height: 32px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #1976d2;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 16px;
+    }
+
+    .loading-text {
+        font-size: 14px;
+        color: #666;
+        text-align: center;
+    }
+
+    .loading-dots::after {
+        content: '...';
+        animation: dots 1.5s infinite;
+    }
+
+    @keyframes dots {
+        0%, 20% { content: '.'; }
+        40% { content: '..'; }
+        60%, 100% { content: '...'; }
+    }
+
+    /* Pastikan tab-pane memiliki height yang proper */
+    .tab-pane {
+        display: none;
+        height: 100%;
+        min-height: 300px; /* Minimum height untuk loading */
+        overflow-y: auto;
+    }
+
+    .tab-pane.active {
+        display: flex;
+        flex-direction: column;
+    }
     /* CSS tambahan untuk section */
     .acc-section {
         margin-bottom: 16px;
@@ -498,144 +555,144 @@ GM_addStyle(`
         color: #666;
     }
 
-    .debug-item {
-        margin-bottom: 4px;
-        display: flex;
-        justify-content: space-between;
-    }
+.debug-item {
+    margin-bottom: 4px;
+    display: flex;
+    justify-content: space-between;
+}
 
-    .debug-label {
-        font-weight: 500;
-    }
+.debug-label {
+    font-weight: 500;
+}
 
-    .debug-value {
-        color: #1976d2;
-    }
+.debug-value {
+    color: #1976d2;
+}
 
-    .debug-error {
-        color: #f44336;
-        font-weight: 500;
-    }
+.debug-error {
+    color: #f44336;
+    font-weight: 500;
+}
 
-    .debug-success {
-        color: #4caf50;
-        font-weight: 500;
-    }
+.debug-success {
+    color: #4caf50;
+    font-weight: 500;
+}
 
-    .sql-debug {
-        background: #fff3cd;
-        border: 1px solid #ffeaa7;
-        border-radius: 4px;
-        padding: 8px;
-        margin-top: 8px;
-        font-family: monospace;
-        font-size: 10px;
-        color: #856404;
-    }
+.sql-debug {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 4px;
+    padding: 8px;
+    margin-top: 8px;
+    font-family: monospace;
+    font-size: 10px;
+    color: #856404;
+}
 
-    .realtime-status {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        margin-right: 8px;
-    }
+.realtime-status {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
 
-    .realtime-connected {
-        background-color: #4caf50;
-    }
+.realtime-connected {
+    background-color: #4caf50;
+}
 
-    .realtime-disconnected {
-        background-color: #f44336;
-    }
+.realtime-disconnected {
+    background-color: #f44336;
+}
 
-    .firebase-toast {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: #4caf50;
-        color: white;
-        padding: 16px;
-        border-radius: 8px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        z-index: 10001;
-        max-width: 300px;
-        animation: slideInRight 0.3s ease;
-        border-left: 4px solid #2e7d32;
-    }
+.firebase-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #4caf50;
+    color: white;
+    padding: 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    z-index: 10001;
+    max-width: 300px;
+    animation: slideInRight 0.3s ease;
+    border-left: 4px solid #2e7d32;
+}
 
-    @keyframes slideInRight {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-    }
+@keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
 
-    .firebase-toast.error {
-        background: #f44336;
-        border-left-color: #c62828;
-    }
+.firebase-toast.error {
+    background: #f44336;
+    border-left-color: #c62828;
+}
 
-    /* TAB INTERFACE - PERBAIKAN BARU */
-    .tab-container {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-    }
+/* TAB INTERFACE - PERBAIKAN BARU */
+.tab-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
 
-    .tab-buttons {
-        display: flex;
-        background: #f5f5f5;
-        border-bottom: 1px solid #e0e0e0;
-    }
+.tab-buttons {
+    display: flex;
+    background: #f5f5f5;
+    border-bottom: 1px solid #e0e0e0;
+}
 
-    .tab-button {
-        flex: 1;
-        padding: 12px 16px;
-        border: none;
-        background: none;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        color: #666;
-        border-bottom: 2px solid transparent;
-        transition: all 0.2s ease;
-    }
+.tab-button {
+    flex: 1;
+    padding: 12px 16px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: #666;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s ease;
+}
 
-    .tab-button:hover {
-        background: #e8e8e8;
-        color: #333;
-    }
+.tab-button:hover {
+    background: #e8e8e8;
+    color: #333;
+}
 
-    .tab-button.active {
-        color: #1976d2;
-        border-bottom-color: #1976d2;
-        background: white;
-    }
+.tab-button.active {
+    color: #1976d2;
+    border-bottom-color: #1976d2;
+    background: white;
+}
 
-    .tab-content {
-        flex: 1;
-        overflow: hidden;
-    }
+.tab-content {
+    flex: 1;
+    overflow: hidden;
+}
 
-    .tab-pane {
-        display: none;
-        height: 100%;
-        overflow-y: auto;
-    }
+.tab-pane {
+    display: none;
+    height: 100%;
+    overflow-y: auto;
+}
 
-    .tab-pane.active {
-        display: block;
-    }
+.tab-pane.active {
+    display: block;
+}
 
-    /* ACTION BUTTONS - PERBAIKAN BARU */
-    .action-buttons {
-        display: none;
-        gap: 8px;
-        margin-top: 12px;
-        padding-top: 12px;
-        border-top: 1px solid #e0e0e0;
-        justify-content: flex-end;
-        animation: fadeIn 0.2s ease;
-    }
+/* ACTION BUTTONS - PERBAIKAN BARU */
+.action-buttons {
+    display: none;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e0e0e0;
+    justify-content: flex-end;
+    animation: fadeIn 0.2s ease;
+}
 
 .action-btn {
     padding: 6px 12px;
@@ -763,7 +820,7 @@ GM_addStyle(`
     };
 
     // ==================== FUNGSI BARU UNTUK FITUR ACC ====================
-    // Fungsi untuk menampilkan panel ACC dengan daftar jasa sederhana
+    // Fungsi untuk menampilkan panel ACC yang disederhanakan
     function showAccPanel(estimasiId, komponenData, selectedSpareparts = [], serviceData = null) {
         // Sembunyikan semua panel ACC lainnya
         document.querySelectorAll('.acc-panel').forEach(panel => {
@@ -783,27 +840,23 @@ GM_addStyle(`
         let accPanel = estimasiItem.querySelector('.acc-panel');
 
         if (!accPanel) {
-            // Buat panel ACC baru dengan section jasa sederhana
+            // Buat panel ACC baru yang disederhanakan
             accPanel = document.createElement('div');
             accPanel.className = 'acc-panel';
             accPanel.innerHTML = `
             <div class="acc-section">
-                <div class="acc-section-title">Sparepart yang di-ACC:</div>
-                <div class="acc-checkbox-group" id="acc-checkbox-${estimasiId}">
-                    <!-- Checkbox sparepart akan diisi oleh JavaScript -->
-                </div>
+                <div class="acc-section-title">Sparepart yang di-ACC</div>
+                <div class="acc-checkbox-group" id="acc-checkbox-${estimasiId}"></div>
             </div>
             <div class="acc-section">
-                <div class="acc-section-title">Daftar Jasa:</div>
-                <div class="acc-service-list" id="acc-service-${estimasiId}">
-                    <!-- Daftar jasa akan diisi oleh JavaScript -->
-                </div>
+                <div class="acc-section-title">Daftar Jasa</div>
+                <div class="acc-service-list" id="acc-service-${estimasiId}"></div>
             </div>
             <div class="acc-actions">
                 <button class="acc-cancel-btn" data-id="${estimasiId}">Batal</button>
                 <button class="acc-save-btn" data-id="${estimasiId}">
-                    <span class="material-icons" style="font-size: 14px;">save</span>
-                    Simpan ACC
+                    <span style="font-size: 12px;">💾</span>
+                    Simpan
                 </button>
             </div>
         `;
@@ -855,9 +908,13 @@ GM_addStyle(`
     }
 
     // Load data jasa ke daftar sederhana dengan tombol hapus
+    // Load data jasa ke daftar sederhana TANPA HARGA
     async function loadServiceList(estimasiId, serviceData = null) {
         const serviceList = document.getElementById(`acc-service-${estimasiId}`);
         if (!serviceList) return;
+
+        // Tampilkan loading sederhana
+        serviceList.innerHTML = '<div style="text-align: center; padding: 10px; color: #666; font-size: 11px;">Memuat jasa...</div>';
 
         // Jika serviceData tidak disediakan, fetch dari database
         let services = serviceData;
@@ -880,7 +937,7 @@ GM_addStyle(`
         serviceList.innerHTML = '';
 
         if (!services || (Array.isArray(services) && services.length === 0)) {
-            serviceList.innerHTML = '<div style="color: #999; font-size: 11px; text-align: center;">Tidak ada jasa</div>';
+            serviceList.innerHTML = '<div style="color: #999; font-size: 11px; text-align: center; padding: 10px;">Tidak ada jasa</div>';
             return;
         }
 
@@ -888,28 +945,24 @@ GM_addStyle(`
         const serviceArray = parseServiceData(services);
 
         if (serviceArray.length === 0) {
-            serviceList.innerHTML = '<div style="color: #999; font-size: 11px; text-align: center;">Tidak ada jasa</div>';
+            serviceList.innerHTML = '<div style="color: #999; font-size: 11px; text-align: center; padding: 10px;">Tidak ada jasa</div>';
             return;
         }
 
-        // Get services that are marked for deletion (stored in data attribute)
+        // Get services that are marked for deletion
         const deletedServices = serviceList.getAttribute('data-deleted-services') || '[]';
         const deletedServicesArray = JSON.parse(deletedServices);
 
         serviceArray.forEach((service, index) => {
-            const serviceId = `service-${estimasiId}-${index}`;
             const isDeleted = deletedServicesArray.includes(index);
+            const serviceName = service.desc || 'Service tanpa nama';
 
             const serviceItem = document.createElement('div');
             serviceItem.className = `acc-service-item ${isDeleted ? 'service-deleted' : ''}`;
             serviceItem.setAttribute('data-service-index', index);
             serviceItem.innerHTML = `
-            <div class="acc-service-info">
-                <div class="acc-service-name">${service.desc || 'Unknown Service'}</div>
-                <div class="acc-service-price">${formatRupiah(service.total || service.subtotal || 0)}</div>
-            </div>
+            <div class="acc-service-name">${serviceName}</div>
             <button class="acc-service-delete-btn" data-service-index="${index}" data-estimasi-id="${estimasiId}">
-                <span class="material-icons delete-icon">${isDeleted ? 'undo' : 'delete'}</span>
                 ${isDeleted ? 'Batal' : 'Hapus'}
             </button>
         `;
@@ -1216,7 +1269,7 @@ GM_addStyle(`
         return [];
     }
 
-    // Helper function untuk parse service data
+    // Helper function untuk parse service data - VERSI SEDERHANA
     function parseServiceData(serviceData) {
         if (!serviceData) return [];
 
@@ -1232,7 +1285,7 @@ GM_addStyle(`
                 return serviceData;
             }
         } catch (e) {
-            logDebug('Error parsing service data:', e, 'error');
+            return []; // Return empty array instead of logging to reduce noise
         }
 
         return [];
@@ -2417,12 +2470,30 @@ GM_addStyle(`
     }
 
     async function loadAllEstimasi() {
+        const tabPane = document.getElementById('tab-all');
+        const notificationList = document.getElementById('notificationListAll');
+
+        if (!tabPane || !notificationList) return;
+
+        // Kosongkan dan set loading di tengah panel
+        notificationList.innerHTML = '';
+        tabPane.classList.add('tab-pane-loading');
+
+        // Tambahkan loading container langsung di tab-pane
+        const loadingContainer = document.createElement('div');
+        loadingContainer.className = 'loading-container';
+        loadingContainer.innerHTML = `
+        <div class="loading-spinner-large"></div>
+        <div class="loading-text">Memuat data estimasi<span class="loading-dots"></span></div>
+    `;
+
+        tabPane.appendChild(loadingContainer);
+
         try {
             const fiveDaysAgo = new Date();
             fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
             const fiveDaysAgoStr = fiveDaysAgo.toISOString();
 
-            // PERBAIKAN: Tambahkan field mra_catatan dan mra_updated_at
             const { data: estimasiData, error } = await supabase
             .from('estimasi')
             .select('id, nopol, jenis_mobil, komponen, created_at, teknisi_id, status, service_advisor, mra_selected_spareparts, mra_catatan, mra_updated_at, users:teknisi_id(full_name, email)')
@@ -2434,13 +2505,39 @@ GM_addStyle(`
             if (error) throw error;
 
             const allEstimasi = estimasiData || [];
+
+            // Hapus loading dan update panel
+            tabPane.classList.remove('tab-pane-loading');
+            loadingContainer.remove();
+
             updateAllEstimasiPanel(allEstimasi);
 
             logDebug(`Loaded ${allEstimasi.length} all estimasi`, null, 'info');
 
         } catch (error) {
             logDebug('Error loading all estimasi:', error, 'error');
-            updateAllEstimasiPanel([]);
+
+            // Hapus loading dan tampilkan error
+            tabPane.classList.remove('tab-pane-loading');
+            loadingContainer.remove();
+
+            // Tampilkan error state di tengah
+            notificationList.innerHTML = `
+            <div class="loading-container">
+                <span class="material-icons" style="font-size: 48px; color: #ccc; margin-bottom: 16px;">error</span>
+                <div>Gagal memuat data estimasi</div>
+                <div style="font-size: 11px; color: #999; margin-top: 8px;">${error.message}</div>
+                <button class="retry-btn" style="margin-top: 12px; padding: 8px 16px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    Coba Lagi
+                </button>
+            </div>
+        `;
+
+            // Setup retry button
+            const retryBtn = notificationList.querySelector('.retry-btn');
+            if (retryBtn) {
+                retryBtn.addEventListener('click', loadAllEstimasi);
+            }
         }
     }
 
